@@ -1,0 +1,131 @@
+#!/bin/sh
+#
+# /etc/init.d/MY_DAEMON -- startup script for JSVC Daemon
+#
+#
+### BEGIN INIT INFO
+# Provides:          MY_DAEMON
+# Required-Start:    $local_fs $remote_fs $network
+# Required-Stop:     $local_fs $remote_fs $network
+# Should-Start:      $named
+# Should-Stop:       $named
+# Default-Start:     2 3 4 5
+# Default-Stop:      1
+# Short-Description: Start MY_DAEMON.
+# Description:       Start the MY_DAEMON Daemon.
+### END INIT INFO
+
+set -e
+
+DAEMON_HOME=/srv/MY_DAEMON
+CLASSPATH=$(echo "$DAEMON_HOME/lib"/*.jar | tr ' ' ':')
+DAEMON_JAR="$DAEMON_HOME/dist/MY_DAEMON.jar"
+DAEMON_BOOTSTRAP=org.vertx.java.deploy.impl.cli.Starter
+DAEMON_ARGS="run com.my.java.daemon"
+# Location where the jsvc.daemonstarter jar is located
+JAR="$DAEMON_HOME/dist/jsvc.daemonstarter.jar"
+PATH=/bin:/usr/bin:/sbin:/usr/sbin
+NAME=MY_DAEMON
+DESC="MY_DAEMON Daemon"
+DAEMON=/usr/bin/jsvc
+LOG_LOC=$DAEMON_HOME/log
+DAEMON_USER=MY_DAEMON
+
+if [ `id -u` -ne 0 ]; then
+    echo "You need root privileges to run this script"
+    exit 1
+fi
+
+# Make sure daemon is started with system locale
+. /lib/lsb/init-functions
+. /etc/default/rcS
+
+# Make sure number of open files limit is high enough
+ulimit -n 1048576
+
+# Set to whatever your java home is
+export JAVA_HOME=/usr/lib/jvm/java-7-openjdk/
+
+# Some Java Opts - set your own
+JAVA_OPTS="$JAVA_OPTS -Xms1200m"
+JAVA_OPTS="$JAVA_OPTS -Xmx1200m"
+
+if [ ! -f "$DAEMON" ]; then
+    log_failure_msg "missing $DAEMON"
+    exit 1
+fi
+
+# Define other required variables
+DAEMON_PID="/var/run/$NAME.pid"
+JSVC_BOOTSTRAP=net.pyxzl.jsvc.daemonstarter.DaemonStarter
+
+case "$1" in
+  start)
+    if [ -z "$JAVA_HOME" ]; then
+        log_failure_msg "no JDK found - please set JAVA_HOME"
+        exit 1
+    fi
+
+    log_daemon_msg "Starting $DESC" "$NAME"
+    if start-stop-daemon --test --start --pidfile "$DAEMON_PID" \
+        --user $DAEMON_USER --startas "$JAVA_HOME/bin/java" \
+        >/dev/null; then
+
+        cd "$DAEMON_HOME"
+        $DAEMON -user "$DAEMON_USER" -cp "$CLASSPATH:$JAR" \
+            -procname $NAME -jvm server -home "$JAVA_HOME" \
+            -outfile "$LOG_LOC/jsvc.out" -errfile "$LOG_LOC/jsvc.err" \
+            -pidfile "$DAEMON_PID" $JAVA_OPTS "$JSVC_BOOTSTRAP" "$DAEMON_BOOTSTRAP" $DAEMON_ARGS
+
+        sleep 3
+            if start-stop-daemon --test --start --pidfile "$DAEMON_PID" \
+            --user $DAEMON_USER --startas "$JAVA_HOME/bin/java" \
+            >/dev/null; then
+            log_end_msg 1
+        else
+            log_end_msg 0
+        fi
+    else
+        log_progress_msg "(already running)"
+        log_end_msg 0
+    fi
+    ;;
+  stop)
+    log_daemon_msg "Stopping $DESC" "$NAME"
+        if start-stop-daemon --test --start --pidfile "$DAEMON_PID" \
+        --user "$DAEMON_USER" --startas "$JAVA_HOME/bin/java" \
+        >/dev/null; then
+        log_progress_msg "(not running)"
+    else
+        $DAEMON -cp "$JSVC_CLASSPATH" -pidfile "$DAEMON_PID" -stop "$JSVC_BOOTSTRAP"
+    fi
+    log_end_msg 0
+    ;;
+   status)
+        if start-stop-daemon --test --start --pidfile "$DAEMON_PID" --user $DAEMON_USER --startas "$JAVA_HOME/bin/java" >/dev/null; then
+
+        if [ -f "$CATALINA_PID" ]; then
+            log_success_msg "$DESC is not running, but pid file exists."
+            exit 1
+        else
+            log_success_msg "$DESC is not running."
+            exit 3
+        fi
+    else
+        log_success_msg "$DESC is running with pid `cat $DAEMON_PID`"
+    fi
+        ;;
+  restart|force-reload)
+        if start-stop-daemon --test --stop --pidfile "$DAEMON_PID" --user $DAEMON_USER --startas "$JAVA_HOME/bin/java" >/dev/null; then
+        $0 stop
+        sleep 1
+    fi
+    $0 start
+    ;;
+  *)
+    log_success_msg "Usage: $0 {start|stop|restart|status}"
+    exit 1
+    ;;
+esac
+
+exit 0
