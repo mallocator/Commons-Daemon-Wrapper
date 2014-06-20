@@ -17,19 +17,31 @@
 
 set -e
 
+# The directory where you own program resides
 DAEMON_HOME=/srv/MY_DAEMON
+# The location of the libraries for your program. Either pur here a list of the files or use this little script to just include all jars from the /lib folder
 CLASSPATH=$(echo "$DAEMON_HOME/lib"/*.jar | tr ' ' ':')
+# The jar that holds your own program code
 DAEMON_JAR="$DAEMON_HOME/dist/MY_DAEMON.jar"
-DAEMON_BOOTSTRAP=org.vertx.java.deploy.impl.cli.Starter
-DAEMON_ARGS="run com.my.java.daemon"
+# The fully qualified name of the class that holds your main() method
+DAEMON_BOOTSTRAP=com.my.entry.classname.with.Main
+# your arguments for your program
+DAEMON_ARGS="dev 8000 whatever"
 # Location where the jsvc.daemonstarter jar is located
 JAR="$DAEMON_HOME/dist/jsvc.daemonstarter.jar"
 PATH=/bin:/usr/bin:/sbin:/usr/sbin
+# Give this daemon a nicer name so you know what is running
 NAME=MY_DAEMON
+# A description that will be printed for the daemon
 DESC="MY_DAEMON Daemon"
+# Make sure you installed jsvc. This is the location where it should reside
 DAEMON=/usr/bin/jsvc
+# The wrapper is writing logs here if something happens
 LOG_LOC=$DAEMON_HOME/log
+# Make sure the user exists with which this daemon should be run. The service is started as root but then drops to this user after the process has been started
 DAEMON_USER=MY_DAEMON
+
+########### Configuration end, rest is script executing the daemon
 
 if [ `id -u` -ne 0 ]; then
     echo "You need root privileges to run this script"
